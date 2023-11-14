@@ -122,6 +122,15 @@ https://github.com/QianMo/Unity-Design-Pattern/tree/master/Assets/Game%20Program
 
 # 游戏设计模式 Game Programming Patterns
 
+## Base Knowledge
+
+### Behaviour类与MonoBehaviour类
+Behaviour是一个继承自Component的基础类，它是所有在GameObjects上附加的行为组件的基类。这个类本身不能被实例化，
+但它提供了一些基础的功能和生命周期事件（例如启用和禁用行为）。
+
+MonoBehaviour是继承自Behaviour的一个类，它添加了许多常用的生命周期事件（例如Start，Update，FixedUpdate等），
+以及许多处理用户输入和协程的功能。在Unity中，大部分自定义的游戏脚本都应该继承自MonoBehaviour。
+
 ## Part1 - Design Patterns Revisited 重访设计模式
 
 ### 1-Command Patterns 命令模式

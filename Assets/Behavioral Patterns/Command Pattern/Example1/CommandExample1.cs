@@ -12,6 +12,7 @@ using System.Collections.Generic;
 
 namespace CommandExample1
 {
+    // 一个具体的例子模拟用户输入
     public class CommandExample1 : MonoBehaviour
     {
 	    void Start ( )
@@ -34,7 +35,7 @@ namespace CommandExample1
     }
 
     /// <summary>
-    /// The 'Command' abstract class
+    /// The 'Command' abstract class  Command的抽象类，分成Execute() 和 UnExecute()
     /// </summary>
     abstract class Command
     {
@@ -44,6 +45,7 @@ namespace CommandExample1
 
     /// <summary>
     /// The 'ConcreteCommand' class
+    /// 定义Caculate的命令类
     /// </summary>
     class CalculatorCommand : Command
     {
@@ -127,7 +129,7 @@ namespace CommandExample1
     {
         // Initializers
         private Calculator _calculator = new Calculator();
-        private List<Command> _commands = new List<Command>();
+        private List<Command> _commands = new List<Command>();  // 用于记录命令的列表
         private int _current = 0;
 
         public void Redo(int levels)
@@ -169,3 +171,21 @@ namespace CommandExample1
         }
     }
 }
+
+// 通篇读完，精妙绝伦，谢谢浅墨大佬
+
+/*
+这段代码是一个实现了命令模式（Command Pattern）的示例，它用于实现一个简单的计算器应用。在这个应用中，用户的每一个操作（如加、减、乘、除）都被包装成一个命令对象，并且可以被撤销和重做。
+
+这段代码中的主要类和它们的作用如下：
+
+Calculator：这是一个执行操作的类，也被称为接收者类（Receiver）。它提供了一个Operation方法，该方法根据输入的操作符和操作数执行相应的操作。
+
+Command：这是一个命令的抽象类，它定义了所有命令必须实现的接口，包括Execute和UnExecute方法。Execute方法用于执行命令，UnExecute方法用于撤销命令。
+
+CalculatorCommand：这是Command类的一个具体实现，它包装了一个计算器操作。它的Execute方法调用Calculator的Operation方法来执行操作，而它的UnExecute方法则执行相反的操作以撤销之前的操作。
+
+User：这是一个调用者类（Invoker），它维护了一个命令的列表，并提供了Undo和Redo方法来撤销和重做命令。它还提供了一个Compute方法，该方法创建一个新的CalculatorCommand，执行它，并将它添加到命令列表中。
+
+CommandExample1：这是一个使用了上述所有类的示例类。它创建一个User对象，然后调用其Compute方法来执行一系列的计算器操作。然后，它调用Undo和Redo方法来撤销和重做这些操作。
+*/
