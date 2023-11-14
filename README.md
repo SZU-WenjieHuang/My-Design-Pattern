@@ -11,6 +11,8 @@ This repository is about cool design patterns written in Unity3D C#.
 * 每种模式都包含对应的结构实现、应用示例以及图示介绍。类似[Naphier/unity-design-patterns]的结构，此repo中的每种模式用单独的文件夹分开。每种模式对应的文件夹中包含了名为“Structure”的子文件夹，里面存放的是此模式在Unity中的使用代码的基本框架实现，而另外包含的Example子文件夹中存放的是此模式在Unity中使用的实际示例。每种框架实现或实例示例实现都包含对应的场景，每种模式文件夹中可能包含一个或者多个Example。
 * 《[游戏编程模式]》一书中介绍的常用游戏设计模式的Unity版实现也有部分实现。
 
+这一个markdown也会记录我自己对于设计模式的认知和笔记，希望能有帮助:)
+
 # Contents
 ## I、Gang of Four Patterns in Unity （23种GOF设计模式的Unity实现）
 ### Behavioral Patterns 行为型模式
@@ -117,3 +119,194 @@ https://github.com/QianMo/Unity-Design-Pattern/tree/master/Assets/Game%20Program
 [Head First Design Patterns]:https://www.amazon.com/dp/0596007124//ref=cm_sw_su_dp?tag=nethta-20
 [Naphier/unity-design-patterns]:https://github.com/Naphier/unity-design-patterns
 [设计模式与游戏完美开发]:https://www.amazon.cn/dp/B01N9GO0ZC
+
+# 游戏设计模式 Game Programming Patterns
+
+## Part1 - Design Patterns Revisited 重访设计模式
+
+### 1-Command Patterns 命令模式
+
+前置概念:第一公民函数
+
+"第一公民函数"（First-class functions）是函数式编程的一个概念，它指的是在一个编程语言中，函数被当作一等公民（first-class citizens）。这意味着函数可以像其他任何数据类型一样被使用和操作，包括：
+
+1-能够被赋值给变量或数据结构中的元素。</br>
+2-能够作为参数传递给其他函数。</br>
+3-能够作为函数的返回结果。</br>
+4-在运行时能够创建和修改。</br>
+
+例子如下:
+```cpp
+#include <iostream>
+
+// 一个函数，接受两个int类型的参数
+int add(int x, int y) {
+    return x + y;
+}
+
+// 另一个函数，接受两个int和一个函数指针
+int apply_func(int x, int y, int (*func)(int, int)) {
+    return func(x, y);
+}
+
+int main() {
+    // 调用函数，将add函数作为参数传递
+    std::cout << apply_func(5, 7, add) << std::endl;  // 输出 12
+    return 0;
+}
+```
+
+***理解:***
+命令模式将“请求”封装成对象，以便使用不同的请求、队列或者日志来参数化其他对象，
+同时支持可撤消的操作。
+
+优势在于: </br>
+
+1-解耦 </br>
+比如一些对按键输入的回调函数，我们在把Command 抽象成对象之后，可以把它与具体的按键解耦，
+即这个按键的函数我们可以重新定义。同时，我们也可以进一步把命令的执行和使用者解耦。
+
+
+2-支持撤销 / 重做 / 重放
+
+***例子01 解耦***
+01
+```cpp
+void InputHandler::handleInput()
+{
+  if (isPressed(BUTTON_X)) jump();
+  else if (isPressed(BUTTON_Y)) fireGun();
+  else if (isPressed(BUTTON_A)) swapWeapon();
+  else if (isPressed(BUTTON_B)) lurchIneffectively();
+}
+```
+
+02
+```cpp
+void InputHandler::handleInput()
+{
+  if (isPressed(BUTTON_X)) buttonX_->execute();
+  else if (isPressed(BUTTON_Y)) buttonY_->execute();
+  else if (isPressed(BUTTON_A)) buttonA_->execute();
+  else if (isPressed(BUTTON_B)) buttonB_->execute();
+}
+```
+
+在这里，有一个基类Command，然后子类XYAB，分别继承基类并实现自己的方法。
+同时定义一个InputHandler类来管理这些Command的实例化指针。
+
+```cpp
+class InputHandler
+{
+public:
+  void handleInput();
+
+  // 绑定命令的方法……
+
+private:
+  Command* buttonX_;
+  Command* buttonY_;
+  Command* buttonA_;
+  Command* buttonB_;
+};
+
+```
+
+这样我们就能实现每个按键和具体命令实现之间的解耦。
+
+03
+
+```cpp
+Command* InputHandler::handleInput()
+{
+  if (isPressed(BUTTON_X)) return buttonX_;
+  if (isPressed(BUTTON_Y)) return buttonY_;
+  if (isPressed(BUTTON_A)) return buttonA_;
+  if (isPressed(BUTTON_B)) return buttonB_;
+
+  // 没有按下任何按键，就什么也不做
+  return NULL;
+}
+```
+
+更进一步，要是希望把执行的角色和和执行时间与command解耦，我们也可以这样操作；命令与角色和
+执行的时间分开。
+
+```cpp
+Command* command = inputHandler.handleInput();
+if (command)
+{
+  command->execute(actor);
+}
+```
+
+***例子02 撤销 重做 重放***
+
+撤销与重做的精髓在于两点:</br>
+1-将每一个命令都一次性实例化，并配有execute() 和 undo() 两个函数。</br>
+2-将连续的命令用一个列表记录。</br>
+
+```cpp
+Command* handleInput()
+{
+  Unit* unit = getSelectedUnit();
+
+  if (isPressed(BUTTON_UP)) {
+    // 向上移动单位
+    int destY = unit->y() - 1;
+    return new MoveUnitCommand(unit, unit->x(), destY);
+  }
+
+  if (isPressed(BUTTON_DOWN)) {
+    // 向下移动单位
+    int destY = unit->y() + 1;
+    return new MoveUnitCommand(unit, unit->x(), destY);
+  }
+
+  // 其他的移动……
+
+  return NULL;
+}
+```
+
+这里, 向上移动和向下移动这些command，每次触发时都会返回一个实例化之后的对象。
+
+```cpp
+class MoveUnitCommand : public Command
+{
+public:
+  MoveUnitCommand(Unit* unit, int x, int y)
+  : unit_(unit),
+    xBefore_(0),
+    yBefore_(0),
+    x_(x),
+    y_(y)
+  {}
+
+  virtual void execute()
+  {
+    // 保存移动之前的位置
+    // 这样之后可以复原。
+
+    xBefore_ = unit_->x();
+    yBefore_ = unit_->y();
+
+    unit_->moveTo(x_, y_);
+  }
+
+  virtual void undo()
+  {
+    unit_->moveTo(xBefore_, yBefore_);
+  }
+
+private:
+  Unit* unit_;
+  int xBefore_, yBefore_;
+  int x_, y_;
+};
+```
+
+这样子，执行的时候就调用execute(), 撤销的时候就调用undo(); 我们需要有一个列表，记录玩家的一系列命令；
+这样就可以实现连续的重做和撤销。
+
+回放的功能，其实就是用不同角度的camera，把某一时间段的一些列操作按照时间点重新回放了一遍。
