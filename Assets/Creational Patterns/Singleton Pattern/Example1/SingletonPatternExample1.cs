@@ -91,3 +91,17 @@ namespace SingletonPatternExample1
         }
     }
 }
+
+/*
+ * LoadBalancer类的构造函数被保护,使外部无法直接创建实例。
+
+提供一个公共静态方法GetLoadBalancer来获取单例实例。
+
+在GetLoadBalancer内部,使用双重检查锁方式来保证单例的线程安全创建。
+
+使用一个私有静态字段_instance来保存单例实例。
+
+LoadBalancer类内部维护了一个服务器列表_servers。
+
+Server属性实现了简单的随机负载均衡算法,从服务器列表中随机返回一个服务器。
+*/

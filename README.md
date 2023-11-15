@@ -472,24 +472,34 @@ using Observer = std::function<void(T)>;
 单例模式，应该是被回避使用的；
 
 ```cpp
-class FileSystem
-{
+class RenderManager {
+
 public:
-  static FileSystem& instance()
-  {
-    static FileSystem *instance = new FileSystem();
-    return *instance;
+  static RenderManager* GetInstance() {
+    if (_instance == nullptr) {
+      _instance = new RenderManager(); 
+    }
+    return _instance;
   }
 
 private:
-  FileSystem() {}
+  static RenderManager* _instance;
+  
+  RenderManager() {
+    // 构造函数 
+  }
 };
+
+// 在cpp文件中初始化静态成员变量
+RenderManager* RenderManager::_instance = nullptr; 
 ```
 
 哪怕是在多线程情况下，C++11标准也保证了本地静态变量只会初始化一次。
 这里是构造函数放在private，然后唯一的对象放在public；这种是懒汉式，没人用就不运行，
 有人用就在在运行的时候实例化。
 
+构造函数是private，和唯一实例是static选一个就好；</br>
+构造函数private + 唯一实例非static / 构造函数public + 唯一实例static与定义的获取方法，这两个组合都能保证全局唯一实例。
 
 ***单例模式应该在游戏设计中被回避的理由***
 

@@ -50,8 +50,4 @@ namespace SingletonPatternExample2
             Debug.Log("RenderManager is a Singleton !");
         }
     }
-
-
-
-
 }
