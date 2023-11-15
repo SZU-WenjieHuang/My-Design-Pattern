@@ -111,9 +111,30 @@ namespace StatePatternExample5
                 m_Context.SetState(new ConcreteStateA(m_Context));
         }
     }
-
-
 }
 
+/*
+ 这段代码也实现了一个状态模式,主要包含以下几点:
+
+Context类维护当前状态,并根据状态处理请求。
+
+State抽象类定义了状态的基类。
+
+ConcreteStateA、B、C三个具体状态类,继承自State。
+
+每个状态类实现了Handle方法,包含状态转移判断逻辑。
+
+Context的SetState方法用于设置当前状态。
+
+运行流程:
+
+初始化Context,设置初始状态为ConcreteStateA。
+
+Context的Request方法会调用当前状态的Handle处理请求。
+
+在Handle里判断状态转移条件,如果满足则设置Context新的状态。
+
+这样当状态变化时,Context会基于新的状态处理请求。
+*/
 
 

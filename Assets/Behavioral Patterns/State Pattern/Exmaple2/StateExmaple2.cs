@@ -268,3 +268,15 @@ namespace StateExmaple2
         }
     }
 }
+
+/*
+这段代码实现了一个ATM机的状态机,主要包含以下部分:
+
+ATMState接口:定义了ATM的各种操作。
+
+ATMMachine类:ATM机类,维护当前状态及运作逻辑。
+
+具体状态类:HasCard、NoCard等实现了ATMState接口,封装不同状态下的行为。
+
+状态切换逻辑:在各操作后根据条件设置ATMMachine的当前状态。
+*/

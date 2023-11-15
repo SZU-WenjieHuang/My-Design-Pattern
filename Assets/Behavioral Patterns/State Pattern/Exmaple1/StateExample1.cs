@@ -294,3 +294,25 @@ namespace StateExample1
         }
     }
 }
+
+/*
+ * 这个代码实现了一个账户状态的状态模式,主要包含以下几个要点:
+
+抽象状态类State:定义了 deposit、withdraw、payInterest 等账户操作的公共接口。
+
+具体状态类RedState、SilverState、GoldState:继承自State,实现了不同状态下的账户行为逻辑。
+
+上下文类Account:维护了一个当前状态State对象,根据状态处理账户操作请求。
+
+状态转移逻辑:每个具体状态类在操作后会检查状态转移条件,并设置Account的新状态。
+
+运行流程:
+
+创建账户,默认是SilverState状态。
+
+进行存款、取款、计息等账户操作。
+
+每个操作会调用状态对象的方法,不同状态有不同实现逻辑。
+
+操作后检查状态转移条件,可能导致Account的当前状态被设置成新的状态。
+*/
