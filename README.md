@@ -420,3 +420,36 @@ public:
 template<typename T>
 using Observer = std::function<void(T)>;
 ```
+
+### 4-Prototype Pattern 原型模式 
+
+***理解***
+原型模式是一种比较简单的模式，也非常容易理解，实现一个接口，重写一个方法即完成了原型模式。
+在实际应用中，原型模式很少单独出现。经常与其他模式混用，
+他的原型类Prototype也常用抽象类来替代。
+
+***在JSON上的应用***
+在JSON上的应用，一般是通过重复使用一些数据来实现:
+```json
+{
+  "name": "goblin grunt",
+  "minHealth": 20,
+  "maxHealth": 30,
+  "resists": ["cold", "poison"],
+  "weaknesses": ["fire", "light"]
+}
+
+{
+  "name": "goblin wizard",
+  "prototype": "goblin grunt",
+  "spells": ["fire ball", "lightning bolt"]
+}
+
+{
+  "name": "goblin archer",
+  "prototype": "goblin grunt",
+  "attacks": ["short bow"]
+}
+```
+像以上的，wizard和archer，都会以grunt作为原型。所以这样就能简化和抽象其逻辑。
+
