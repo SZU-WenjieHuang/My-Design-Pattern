@@ -519,3 +519,258 @@ RenderManager* RenderManager::_instance = nullptr;
 
 8-携带了不必要的状态。单例频繁使用会让类承载更多状态。
 
+### 6-State Pattern 状态模式(重点)
+这一节，感觉是为了解决游戏玩法AI里，每个角色会有的各种状态而产生的一种很有用的设计模式；
+
+首先最重要的是，有限状态机；可以处理复杂的状态，但是每一次只能处于一个状态，这个可以简单的用枚举来实现:
+
+枚举状态的集合
+```cpp
+enum State
+{
+  STATE_STANDING,
+  STATE_JUMPING,
+  STATE_DUCKING,
+  STATE_DIVING
+};
+```
+
+用switch，case来切换状态
+```cpp
+void Heroine::handleInput(Input input)
+{
+  switch (state_)
+  {
+    case STATE_STANDING:
+      if (input == PRESS_B)
+      {
+        state_ = STATE_JUMPING;
+        yVelocity_ = JUMP_VELOCITY;
+        setGraphics(IMAGE_JUMP);
+      }
+      else if (input == PRESS_DOWN)
+      {
+        state_ = STATE_DUCKING;
+        setGraphics(IMAGE_DUCK);
+      }
+      break;
+
+    case STATE_JUMPING:
+      if (input == PRESS_DOWN)
+      {
+        state_ = STATE_DIVING;
+        setGraphics(IMAGE_DIVE);
+      }
+      break;
+
+    case STATE_DUCKING:
+      if (input == RELEASE_DOWN)
+      {
+        state_ = STATE_STANDING;
+        setGraphics(IMAGE_STAND);
+      }
+      break;
+  }
+}
+```
+
+但这种用枚举和用Switch case切换的有限状态机是不够好的，因为需要处理复杂的功能，比如每个状态需要有自己的计时器，
+所以状态模式的精髓就是：把每一个状态抽象成一个类，如下：
+
+最基础的基类里，需要有handleInput和update这两个方法；
+```cpp
+class HeroineState
+{
+public:
+  virtual ~HeroineState() {}
+  virtual void handleInput(Heroine& heroine, Input input) {}
+  virtual void update(Heroine& heroine) {}
+};
+```
+
+然后每一个派生类都可以有自己的内容，比如这里的chargeTime_;
+
+```cpp
+class DuckingState : public HeroineState
+{
+public:
+  DuckingState()
+  : chargeTime_(0)
+  {}
+
+  virtual void handleInput(Heroine& heroine, Input input) {
+    if (input == RELEASE_DOWN)
+    {
+      // 改回站立状态……
+      heroine.setGraphics(IMAGE_STAND);
+    }
+  }
+
+  virtual void update(Heroine& heroine) {
+    chargeTime_++;
+    if (chargeTime_ > MAX_CHARGE)
+    {
+      heroine.superBomb();
+    }
+  }
+
+private:
+  int chargeTime_;
+};
+```
+
+然后角色，可以通过委托的方法，调用这些状态的方法去执行handleInput() 和 update()这两个函数
+
+```cpp
+class Heroine
+{
+public:
+  virtual void handleInput(Input input)
+  {
+    state_->handleInput(*this, input);
+  }
+
+  virtual void update()
+  {
+    state_->update(*this);
+  }
+
+  // 其他方法……
+private:
+  HeroineState* state_;
+};
+```
+
+那我们怎么切换状态呢？ 两种方法，单人的时候可以用静态状态，多人的时候，因为多个用户需要有多个独一无二的状态，所以需要用
+实例化状态；
+
+静态状态如下:
+
+```cpp
+class HeroineState
+{
+public:
+  static StandingState standing;
+  static DuckingState ducking;
+  static JumpingState jumping;
+  static DivingState diving;
+
+  // 其他代码……
+};
+```
+
+这样可以直接切换另一个静态的状态；
+
+```cpp
+if (input == PRESS_B)
+{
+  heroine.state_ = &HeroineState::jumping;
+  heroine.setGraphics(IMAGE_JUMP);
+}
+```
+
+实例化状态如下:
+
+每次指派新的state的时候都需要把旧的state删了，再换成新的。
+```cpp
+void Heroine::handleInput(Input input)
+{
+  HeroineState* state = state_->handleInput(*this, input);
+  if (state != NULL)
+  {
+    delete state_;
+    state_ = state;
+  }
+}
+```
+
+然后每次指派新的state的时候，就New一个
+
+```cpp
+HeroineState* StandingState::handleInput(Heroine& heroine,
+                                         Input input)
+{
+  if (input == PRESS_DOWN)
+  {
+    // 其他代码……
+    return new DuckingState();
+  }
+
+  // 保持这个状态
+  return NULL;
+}
+```
+
+***并发状态机***
+
+更复杂的情况，就需要并发状态机了，比如一个英雄拿着枪跑动。
+
+像这样，使用两个状态；
+```cpp
+class Heroine
+{
+  // 其他代码……
+
+private:
+  HeroineState* state_;
+  HeroineState* equipment_;
+};
+```
+
+然后两个状态都分别进行委托；
+
+```cpp
+void Heroine::handleInput(Input input)
+{
+  state_->handleInput(*this, input);
+  equipment_->handleInput(*this, input);
+}
+```
+
+***分层状态机***
+
+分层状态机就是，父类可以定义子类统一都有的状态。
+比如"On Ground" 是一个状态，然后 "Ducking" 等都是基础 On Ground 的状态，然后可以通过在父类里定义Jump，这样
+子类继承之后就不需要重复定义了；
+
+```cpp
+class OnGroundState : public HeroineState
+{
+public:
+  virtual void handleInput(Heroine& heroine, Input input)
+  {
+    if (input == PRESS_B)
+    {
+      // 跳跃……
+    }
+    else if (input == PRESS_DOWN)
+    {
+      // 俯卧……
+    }
+  }
+};
+```
+
+子类继承
+
+```cpp
+class DuckingState : public OnGroundState
+{
+public:
+  virtual void handleInput(Heroine& heroine, Input input)
+  {
+    if (input == RELEASE_DOWN)
+    {
+      // 站起……
+    }
+    else
+    {
+      // 没有处理输入，返回上一层
+      OnGroundState::handleInput(heroine, input);
+    }
+  }
+};
+```
+
+
+
