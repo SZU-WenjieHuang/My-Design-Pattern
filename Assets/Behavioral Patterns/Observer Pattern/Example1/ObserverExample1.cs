@@ -16,7 +16,7 @@ namespace ObserverExample1
         {
             // Create IBM stock and attach investors
             IBM ibm = new IBM("IBM", 120.00);
-            ibm.Attach(new Investor("Sorros"));
+            ibm.Attach(new Investor("Sorros"));      // 添加观察者
             ibm.Attach(new Investor("Berkshire"));
 
             // Fluctuating prices will notify investors
@@ -54,6 +54,7 @@ namespace ObserverExample1
             _investors.Remove(investor);
         }
 
+        //逐个通知观察者
         public void Notify()
         {
             foreach (IInvestor investor in _investors)
@@ -100,6 +101,7 @@ namespace ObserverExample1
     /// <summary>
     /// The 'Observer' interface
     /// </summary>
+    /// 在C#里的interface，就相当于其他语言里的抽象类
     interface IInvestor
     {
         void Update(Stock stock);
@@ -133,3 +135,31 @@ namespace ObserverExample1
         }
     }
 }
+
+/*
+
+这段代码实现了观察者设计模式,主要包含以下几个类:
+
+Stock:抽象主题类,维护一个观察者列表,并定义添加、删除、通知观察者的接口。属性price和symbol。
+
+IBM:具体主题类,继承自Stock类,实现了股价变化时通知观察者的功能。
+
+IInvestor:抽象观察者接口,定义了更新接口。
+
+Investor:具体观察者类,实现了IInvestor接口,在得到通知时将具体的更新操作打印出来。
+
+主要的逻辑在Start函数中:
+
+创建IBM股票对象并传入初始价格
+
+添加两个投资者Sorros和Berkshire到IBM股票的观察者列表
+
+改变IBM股票价格,这会触发通知机制,调用股票的Notify方法
+
+Notify方法遍历观察者列表,调用每个投资者的Update方法
+
+在Update方法中打印更新信息
+
+这样当股票价格改变时,注册在其上的观察者都会得到通知并做出响应的操作。这实现了一个典型的观察者模式。
+
+ */

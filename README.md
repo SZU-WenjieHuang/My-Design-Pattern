@@ -339,3 +339,84 @@ private:
 享元模式的关键是如何将对象的状态分解为内部状态和外部状态，以便可以有效地共享具有相同内部状态的对象！
 
 ### 3-Observer Pattern 观察者模式
+
+***理解***
+在观察者模式中，被观察者（也被称为主题，Subject）确实会维护一个观察者（Observer）的列表。
+当被观察者的状态发生改变时，它会遍历这些观察者并通知他们（通常是通过调用某个特定的方法，如update）。
+这样，所有的观察者都可以得知被观察者的状态改变。
+
+这种模式通常用于实现事件驱动的系统，它允许对象之间的松散耦合，
+因为被观察者并不需要知道观察者的具体实现，它只需要知道观察者有一个可以被调用的update方法。
+
+被观察者(Subject)可以用链表存储观察者, 也可以用列表，他们的区别如下:
+
+内存分配：
+
+链表：链表中的元素在内存中不是顺序存储的，而是通过指针连接在一起。
+链表的优势在于，插入和删除元素是O(1)的操作，因为你只需要改变一些指针就可以了。
+
+列表：列表中的元素在内存中是顺序存储的。这意味着列表在访问元素时速度更快，
+因为它可以利用内存缓存。然而，插入和删除元素（尤其是在列表的中间）可能需要移动大量的元素，因此操作时间复杂度为O(n)。
+
+访问元素：
+
+链表：链表不支持随机访问，如果你想访问链表中的某个元素，你需要从头开始遍历链表，
+直到找到你想要的元素。所以在链表中访问元素的时间复杂度是O(n)。
+
+列表：列表支持随机访问，你可以直接通过索引在O(1)的时间内访问任何元素。
+
+在观察者模式的上下文中，通常使用列表来存储观察者，因为一般而言，
+我们关心的是能够快速地遍历和访问所有的观察者，而不是在列表中间插入或删除观察者。
+然而，如果你的需求是频繁地在观察者列表中添加或删除观察者，链表可能会是一个更好的选择。
+
+***补充知识，C#里的抽象类***
+```cpp
+/// 在C#里的interface，就相当于其他语言里的抽象类
+interface IInvestor
+{
+    void Update(Stock stock);
+}W
+
+/// <summary>
+/// The 'ConcreteObserver' class
+/// </summary>
+class Investor : IInvestor
+{
+    private string _name;
+    private Stock _stock;
+
+    // Constructor
+    public Investor(string name)
+    {
+        this._name = name;
+    }
+
+    public void Update(Stock stock)
+    {
+        //Debug.Log("Notified {0} of {1}'s " +"change to {2:C}", _name, stock.Symbol, stock.Price);
+        Debug.Log("Notified "+ _name+" of "+ stock+"'s " + "change to "+stock.Price);
+    }
+
+    // Gets or sets the stock
+    public Stock Stock
+    {
+        get { return _stock; }
+        set { _stock = value; }
+    }
+}
+```
+在C#里的interface，就相当于其他语言里的抽象类, 可以起到接口的作用，要是在cpp里，可以用纯虚函数和模板实现类似的接口功能；
+
+纯虚函数
+```cpp
+class IObserver {
+public:
+  virtual void Update() = 0;
+};
+```
+
+模板
+```cpp
+template<typename T>
+using Observer = std::function<void(T)>;
+```
