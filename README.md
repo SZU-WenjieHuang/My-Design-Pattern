@@ -1127,3 +1127,214 @@ void Skeleton::update(double elapsed)
   }
 }
 ```
+
+### 10- Bytecode 字节码模式
+
+字节码模式的核心思想是:
+
+1-将游戏对象的行为逻辑定义在外部的字节码文件中,比如文本文件、二进制文件等,里面保存了行为的字节码。
+
+2-游戏引擎提供解释器,可以加载并解析这些字节码文件,得到游戏对象的行为定义。
+
+3-在游戏运行时,引擎使用解释器来解释执行字节码,使得游戏对象产生相应的行为和结果。
+
+4-可以动态加载或切换字节码文件,修改游戏对象行为,而无需重新编译游戏代码。
+
+字节码通常采用一种自定义的指令集和文件格式,它更高级与硬编码,但比机器码低级和抽象。
+这样游戏逻辑可以脱离代码存在,使得游戏行为更容易定制和扩展。
+这种模式解耦了游戏逻辑和引擎,提高了灵活性。
+
+***代码demo***
+比如以下的几个函数，是定义了游戏里法师角色的行为
+
+```cpp
+void setHealth(int wizard, int amount);
+void setWisdom(int wizard, int amount);
+void setAgility(int wizard, int amount);
+void playSound(int soundId);
+void spawnParticles(int particleType);
+```
+
+然后我们可以吧这些行为枚举成一些指令
+
+```cpp
+enum Instruction
+{
+  INST_SET_HEALTH      = 0x00,
+  INST_SET_WISDOM      = 0x01,
+  INST_SET_AGILITY     = 0x02,
+  INST_PLAY_SOUND      = 0x03,
+  INST_SPAWN_PARTICLES = 0x04
+};
+```
+
+然后我们传入instruction，使用switch case，就可以来解决这些指令
+
+```cpp
+switch (instruction)
+{
+  case INST_SET_HEALTH:
+    setHealth(0, 100);
+    break;
+
+  case INST_SET_WISDOM:
+    setWisdom(0, 100);
+    break;
+
+  case INST_SET_AGILITY:
+    setAgility(0, 100);
+    break;
+
+  case INST_PLAY_SOUND:
+    playSound(SOUND_BANG);
+    break;
+
+  case INST_SPAWN_PARTICLES:
+    spawnParticles(PARTICLE_FLAME);
+    break;
+}
+```
+
+我们输入的是一些列byteode，就像0x00，0x01这些，然后就可以在虚拟机里遍历这些bytecode。
+
+```cpp
+class VM
+{
+public:
+  void interpret(char bytecode[], int size)
+  {
+    for (int i = 0; i < size; i++)
+    {
+      char instruction = bytecode[i];
+      switch (instruction)
+      {
+        // 每条指令的跳转分支……
+      }
+    }
+  }
+};
+```
+
+然后也可以像Java虚拟机那样，栈来表示，把一堆operand和operator压入栈内，然后遇到operand就
+继续压入，遇到operator就把栈顶的两个operand去除计算(具体去除多少要看这个行为的需要)；
+
+这就是一个栈的命令都压进去了，就非常像Java的虚拟机；
+```cpp
+LITERAL 0    [0]            # 巫师索引
+LITERAL 0    [0, 0]         # 巫师索引
+GET_HEALTH   [0, 45]        # 获取血量()
+LITERAL 0    [0, 45, 0]     # 巫师索引
+GET_AGILITY  [0, 45, 7]     # 获取敏捷()
+LITERAL 0    [0, 45, 7, 0]  # 巫师索引
+GET_WISDOM   [0, 45, 7, 11] # 获取智慧()
+ADD          [0, 45, 18]    # 将敏捷和智慧加起来
+LITERAL 2    [0, 45, 18, 2] # 被除数：2
+DIVIDE       [0, 45, 9]     # 计算敏捷和智慧的平均值
+ADD          [0, 54]        # 将平均值加到现有血量上。
+SET_HEALTH   []             # 将结果设为血量
+```
+
+### 11-Subclass Sandbox 子类沙箱模式
+
+用一系列由基类提供的操作定义子类中的行为。</br>
+
+子类沙箱模式：基类定义抽象的沙箱方法和几个提供操作的实现方法，
+将他们设为protected，表明它们只为子类所使用。</br>
+每个推导出的沙箱子类用提供的操作实现了沙箱方法。</br>
+
+***理解***
+1-在基类中使用protected方法定义核心功能,而不是public方法。</br>
+2-这些protected方法为子类提供基础能力,子类可以灵活调用和组合这些方法。</br>
+3-子类可以方便地通过继承复用基类的核心功能代码。</br>
+4-这样可以最大限度地减少子类之间及对外的耦合。</br>
+5-基类如同一个沙箱,为子类提供安全可控的空间探索和扩展。</br>
+
+所以,沙箱模式通过protected方法提供一个基础代码框架,在此基础上构建子类,
+可获得高内聚低耦合的效果。
+
+***个人更通俗的理解***
+1-基类就像一个超市的货架,货架上摆放了各种protected方法(商品)。</br>
+2-这些方法是基础通用能力,可被灵活调用和组合。</br>
+3-子类就像超市顾客,可以来选择需要的方法(商品)。</br>
+4-子类根据自己的目的,从货架上选取方法并组合,封装成自己的public方法。</br>
+5-不同子类可选择不同的基础方法,搭建出适合自己的功能。</br>
+6-子类之间不会互相影响,只基于基类的货架。</br>
+
+***代码demo***
+基类定义了一个超级英雄能力的类，有各种实现方法；
+```cpp
+class Superpower
+{
+public:
+  virtual ~Superpower() {}
+
+protected:
+  virtual void activate() = 0;
+
+  void move(double x, double y, double z)
+  {
+    // 实现代码……
+  }
+
+  void playSound(SoundId sound, double volume)
+  {
+    // 实现代码……
+  }
+
+  void spawnParticles(ParticleType type, int count)
+  {
+    // 实现代码……
+  }
+    double getHeroX()
+  {
+    // 实现代码……
+  }
+
+  double getHeroY()
+  {
+    // 实现代码……
+  }
+
+  double getHeroZ()
+  {
+    // 实现代码……
+  }
+
+};
+```
+
+派生类就像挑选物品一样从基类定义的各种protected方法里挑选货品, 自由组合
+```cpp
+class SkyLaunch : public Superpower
+{
+protected:
+  virtual void activate()
+  {
+    if (getHeroZ() == 0)
+    {
+      // 在地面上，冲向空中
+      playSound(SOUND_SPROING, 1.0f);
+      spawnParticles(PARTICLE_DUST, 10);
+      move(0, 0, 20);
+    }
+    else if (getHeroZ() < 10.0f)
+    {
+      // 接近地面，再跳一次
+      playSound(SOUND_SWOOP, 1.0f);
+      move(0, 0, getHeroZ() + 20);
+    }
+    else
+    {
+      // 正在空中，跳劈攻击
+      playSound(SOUND_DIVE, 0.7f);
+      spawnParticles(PARTICLE_SPARKLES, 1);
+      move(0, 0, -getHeroZ());
+    }
+  }
+};
+```
+
+我们要挑选复用率比较高的函数方法放在基类中作为“货物”；
+
+
+
