@@ -887,3 +887,105 @@ private:
 ```
 
 同理的，要是希望在游戏里面整块更新状态，也可以这样操作。
+
+### 8-Game Loop 游戏循环模式
+
+游戏循环模式，实现游戏运行过程中对用户输入处理和时间处理的解耦。
+
+游戏循环模式：游戏循环在游戏过程中持续运转。每循环一次，它非阻塞地处理用户的输入，更新游戏状态，
+并渲染游戏。它跟踪流逝的时间并控制游戏的速率。
+
+游戏循环将游戏的处理过程和玩家输入解耦，和处理器速度解耦，实现用户输入和处理器速度在游戏行进时间上的分离。
+
+游戏循环也许需要与平台的事件循环相协调。如果在操作系统的高层或有图形UI和内建事件循环的平台上构建游戏， 
+那就有了两个应用循环在同时运作，需要对他们进行相应的协调
+
+***在游戏循环模式中，我们怎么保持帧率的稳定***
+
+1-使用固定时间步长(fixed timestep) - 每一帧更新逻辑和渲染使用固定的时间步长,例如每帧16.6ms(大约60FPS)。这可以避免帧率波动影响游戏逻辑更新。
+
+2-间隔渲染(interpolate rendering) - 根据固定逻辑更新间隔来渲染,但允许渲染帧率波动。这可以平滑视觉效果。可以使用线性插值在逻辑更新间隔内渲染额外的帧。
+
+3-时间流逝管理(time warp management) - 如果渲染时间超过了逻辑更新的时间步长,那么就压缩接下来的更新使其“赶上”当前时间。反之,如果渲染太快,可以通过往复重复同一逻辑状态来填充时间。
+
+4-动态时间步长(dynamic timestep) - 允许逻辑更新的时间步长动态变化,但要确保时间流逝总速度保持一致。这更灵活但更难管理。
+
+5-限制帧率(frame rate capping) - 如果硬件支持,可以限制渲染帧率不超过显示器刷新率,避免浪费资源渲染额外的帧。
+
+6-优化游戏代码和资源 - 查找并优化游戏循环中的瓶颈可以提高平均帧率。比如减少游戏对象、降低多边形等
+
+以下是一个最简单没有事件控制的游戏循环:
+
+```cpp
+while (true)
+{
+  processInput();
+  update();
+  render();
+}
+```
+
+增加了一个等待，让运算太快的帧可以等到稳定的帧率再渲染下一帧,
+但是这样解决不了某一帧渲染过慢导致的问题；
+
+```cpp
+while (true)
+{
+  double start = getCurrentTime();
+  processInput();
+  update();
+  render();
+
+  sleep(start + MS_PER_FRAME - getCurrentTime());
+}
+```
+
+
+理解成在恒定帧率的前提下，这一帧要是计算久了，下一帧就快一点
+
+于是就有了动态步长管理，这一帧计算的慢了，下一帧计算的就快一点；
+
+update()根据传入的elapsed时间参数来调整每帧的更新量,保证游戏内部逻辑连贯流畅。
+
+```cpp
+double lastTime = getCurrentTime();
+while (true)
+{
+  double current = getCurrentTime();
+  double elapsed = current - lastTime;
+  processInput();
+  update(elapsed);
+  render();
+  lastTime = current;
+}
+```
+
+但是还会有问题就是，游戏逻辑的更新和渲染同步的话，会导致一些浮点数运算的误差，
+比如在性能好的电脑上，一秒50帧，性能差的电脑上，一秒5帧，要是游戏逻辑和渲染同步更新的话，误差就会很大。
+
+所以我们需要把游戏逻辑和渲染解耦，游戏逻辑根据恒定时间去tick，然后渲染根据硬件性能去tick
+
+这样可以很好地兼顾逻辑精度和渲染流畅度。
+
+```cpp
+double previous = getCurrentTime();
+double lag = 0.0;
+while (true)
+{
+  double current = getCurrentTime();
+  double elapsed = current - previous;
+  previous = current;
+  lag += elapsed;
+
+  processInput();
+
+  while (lag >= MS_PER_UPDATE)
+  {
+    update();
+    lag -= MS_PER_UPDATE;
+  }
+
+  render();
+}
+```
+
