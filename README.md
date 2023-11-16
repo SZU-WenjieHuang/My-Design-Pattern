@@ -773,4 +773,117 @@ public:
 ```
 
 
+### 7-Double Buffer 双缓冲模式
+双缓冲模式一般用于图形显示里的帧缓冲，或者需要整块读取写入，不希望被中断破坏的过程；
 
+最经典的就是有一个swap的原子操作，可以避免图像撕裂等情况。
+
+举个例子，这里有一个Frame
+```cpp
+生了什么。首先是缓冲区本身：
+
+class Framebuffer
+{
+public:
+  Framebuffer() { clear(); }
+
+  void clear()
+  {
+    for (int i = 0; i < WIDTH * HEIGHT; i++)
+    {
+      pixels_[i] = WHITE;
+    }
+  }
+
+  void draw(int x, int y)
+  {
+    pixels_[(WIDTH * y) + x] = BLACK;
+  }
+
+  const char* getPixels()
+  {
+    return pixels_;
+  }
+
+private:
+  static const int WIDTH = 160;
+  static const int HEIGHT = 120;
+
+  char pixels_[WIDTH * HEIGHT];
+};
+```
+
+然后要是不适用Double Buffering绘制，会如下:
+```cpp
+class Scene
+{
+public:
+  void draw()
+  {
+    buffer_.clear();
+
+    buffer_.draw(1, 1);
+    buffer_.draw(4, 1);
+    buffer_.draw(1, 3);
+    buffer_.draw(2, 4);
+    buffer_.draw(3, 4);
+    buffer_.draw(4, 3);
+  }
+
+  Framebuffer& getBuffer() { return buffer_; }
+
+private:
+  Framebuffer buffer_;
+};
+```
+要是从中间读取的话，就会出现图像不完整的情况；
+
+```cpp
+buffer_.draw(1, 1);
+buffer_.draw(4, 1);
+// <- 图形驱动从这里读取像素！
+buffer_.draw(1, 3);
+buffer_.draw(2, 4);
+buffer_.draw(3, 4);
+buffer_.draw(4, 3);
+```
+所以我们使用doube buffering整块绘制，然后整块读取
+
+```cpp
+class Scene
+{
+public:
+  Scene()
+  : current_(&buffers_[0]),
+    next_(&buffers_[1])
+  {}
+
+  void draw()
+  {
+    next_->clear();
+
+    next_->draw(1, 1);
+    // ...
+    next_->draw(4, 3);
+
+    swap();
+  }
+
+  Framebuffer& getBuffer() { return *current_; }
+
+private:
+  void swap()
+  {
+    // 只需交换指针
+    Framebuffer* temp = current_;
+    current_ = next_;
+    next_ = temp;
+  }
+
+  Framebuffer  buffers_[2];
+  Framebuffer* current_;
+  Framebuffer* next_;
+};
+```
+
+同理的，要是希望在游戏里面整块更新状态，也可以这样操作。
