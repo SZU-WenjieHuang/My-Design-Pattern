@@ -5,6 +5,8 @@
 
 // 思想：1、用聚合而不是继承。has a而不是is a。可以理解为设计模式六大原则中的合成复用原则（Composite Reuse Principle）
 //           2、并且可以通过配置来灵活选择是否继承自父类
+
+// 精妙绝伦，谢谢浅墨老师
 //-------------------------------------------------------------------------------------
 
 
@@ -18,6 +20,7 @@ public class TypeObjectPatternExample : MonoBehaviour
     void Start()
     {
         //创建种类，生命值填0表示从父类继承。
+        //创建新的Troll类
         Breed troll = new Breed(null, 25, "The troll hits you!");
 
         Breed trollArcher = new Breed(troll, 0, "The troll archer fires an arrow!");
@@ -106,6 +109,7 @@ public class Monster
     private Breed breed_;
     private string attack_;
 
+    // 构造函数，用Breed来构造Monster
     public Monster(Breed breed)
     {
         health_ = breed.GetHealth();
