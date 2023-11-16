@@ -1336,5 +1336,114 @@ protected:
 
 我们要挑选复用率比较高的函数方法放在基类中作为“货物”；
 
+### 12-Type Object 类型对象模式
+创造一个类A来允许灵活的创造新的类，而类A的每个实例都代表了不同类型的对象。
+
+举个例子，本来我们有各种monster，传统的面向对象的方案是创建一个monster的基类，然后各种monster
+比如Dragon，Troll，都会派生自这个monster基类。
+
+这个是Monster的基类
+
+```cpp
+class Monster
+{
+public:
+  virtual ~Monster() {}
+  virtual const char* getAttack() = 0;
+
+protected:
+  Monster(int startingHealth)
+  : health_(startingHealth)
+  {}
+
+private:
+  int health_; // 当前血值
+};
+```
+
+然后Dragon和Troll的派生类派生自Monster
+
+```cpp
+class Dragon : public Monster
+{
+public:
+  Dragon() : Monster(230) {}
+
+  virtual const char* getAttack()
+  {
+    return "The dragon breathes fire!";
+  }
+};
+
+class Troll : public Monster
+{
+public:
+  Troll() : Monster(48) {}
+
+  virtual const char* getAttack()
+  {
+    return "The troll clubs you!";
+  }
+};
+```
+
+但这样有一个很不好的是，我们要是有一万个monster类型，就需要一万个类，这是我们不希望看到的。
+
+所以Type Object 类型对象模式提出了，我们可以仅有两个类：Monster类和Breed类(种类)，Dragon和
+Troll这些具体的类就不新建一个派生类了，用Monster实例化一个对象就ok。那具体的数值，就是通过Breed
+这个类来传入。
+
+例子：
+
+Breed类，定义了每个具体Monster类型所需的一切
+
+```cpp
+class Breed
+{
+public:
+  Breed(int health, const char* attack)
+  : health_(health),
+    attack_(attack)
+  {}
+
+  int getHealth() { return health_; }
+  const char* getAttack() { return attack_; }
+
+private:
+  int health_; // 初始血值
+  const char* attack_;
+};
+```
+
+那Monster的基类呢，就是用Breed类来初始化。
+```cpp
+class Monster
+{
+public:
+  Monster(Breed& breed)
+  : health_(breed.getHealth()),
+    breed_(breed)
+  {}
+
+  const char* getAttack()
+  {
+    return breed_.getAttack();
+  }
+
+private:
+  int    health_; // 当前血值
+  Breed& breed_;
+};
+```
+以上就是Type Object的核心，这样不管再多的monster类型，一直都是只有两个类，Monster和Breed；
+只不过每一个新的怪物类型，如Dragon，就需要一个Monster的实例，和一个Breed的实例？
+
+对于新的怪物类型Dragon:
+
+1-只需要一个DragonBreed类,包含数据
+
+2-创建一个Monster实例,传入DragonBreed实例
+
+3-Monster根据Breed执行不同的功能
 
 
