@@ -989,3 +989,141 @@ while (true)
 }
 ```
 
+在Unity里的game loop逻辑就是
+先physical，再到input，再到game logic，再到rendering；
+
+### 9-Update Method 更新方法
+更新方法，通过每次处理一帧的行为来模拟一系列独立对象。
+
+更新方法模式：在游戏中保持游戏对象的集合。每个对象实现一个更新方法，以处理对象在一帧内的行为。每一帧中，游戏循环对集合中的每一个对象进行更新。
+当离开每帧时，我们也许需要存储下状态，以备不时之需。
+
+我对更新方法的概念就是，每一个游戏的Entity，都随着游戏Loop而更新自己的状态。
+在游戏循环的更新逻辑Update()中,会遍历所有的Entity,并调用每个Entity的更新方法,让它们更新自身的状态。
+每个Entity会在游戏循环的更新阶段更新自身,从而实现整个游戏世界状态的更新。
+
+这是传统的entity类
+这里的=0，表示一个纯虚函数(pure virtual function)，是一个接口。
+
+这样声明纯虚函数的目的是为了让这个类成为一个抽象类(abstract class)。
+抽象类不能够被实例化,只能被继承。类中含有一个或多个纯虚函数的类就是抽象类。
+
+在C++中,类中包含纯虚函数(至少一个virtual函数被声明为=0),那么这个类就是抽象类,
+不需要额外使用abstract关键字声明。在C++中明确使用abstract关键字标记抽象类,可以使抽象类的定义更加严格和明确。
+
+```cpp
+class Entity
+{
+public:
+  Entity()
+  : x_(0), y_(0)
+  {}
+
+  virtual ~Entity() {}
+  virtual void update() = 0;
+
+  double x() const { return x_; }
+  double y() const { return y_; }
+
+  void setX(double x) { x_ = x; }
+  void setY(double y) { y_ = y; }
+
+private:
+  double x_;
+  double y_;
+};
+```
+
+这是世界类，里面有gameLoop的函数，和Entity的集合，我们的目标就是遍历这个集合
+来更新世界状态.
+
+```cpp
+class World
+{
+public:
+  World()
+  : numEntities_(0)
+  {}
+
+  void gameLoop();
+
+private:
+  Entity* entities_[MAX_ENTITIES];
+  int numEntities_;
+};
+```
+
+像这样
+
+```cpp
+void World::gameLoop()
+{
+  while (true)
+  {
+    // 处理用户输入……
+
+    // 更新每个实体
+    for (int i = 0; i < numEntities_; i++)
+    {
+      entities_[i]->update();
+    }
+
+    // 物理和渲染……
+  }
+}
+```
+
+然后我们每一个实例化的实体，都可以自己定义自己的update类
+```cpp
+class Skeleton : public Entity
+{
+public:
+  Skeleton()
+  : patrollingLeft_(false)
+  {}
+
+  virtual void update()
+  {
+    if (patrollingLeft_)
+    {
+      setX(x() - 1);
+      if (x() == 0) patrollingLeft_ = false;
+    }
+    else
+    {
+      setX(x() + 1);
+      if (x() == 100) patrollingLeft_ = true;
+    }
+  }
+
+private:
+  bool patrollingLeft_;
+};
+```
+
+我们要是希望在里面加入时间，让这个骷髅随着帧率移动，就可以把之前再gameloop里
+的时间传入每个实体的update()函数，比如这里的骷髅
+
+```cpp
+void Skeleton::update(double elapsed)
+{
+  if (patrollingLeft_)
+  {
+    x -= elapsed;
+    if (x <= 0)
+    {
+      patrollingLeft_ = false;
+      x = -x;
+    }
+  }
+  else
+  {
+    x += elapsed;
+    if (x >= 100)
+    {
+      patrollingLeft_ = true;
+      x = 100 - (x - 100);
+    }
+  }
+}
+```
