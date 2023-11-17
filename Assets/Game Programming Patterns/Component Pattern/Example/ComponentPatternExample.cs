@@ -184,3 +184,22 @@ namespace ComponentPatternExample
 
 # endregion
 
+/*
+    Component类是一个抽象基类,它定义了通用的Update接口方法。
+
+    不同的Component类(如InputComponent、PhysicsComponent等)继承自BaseComponent,实现具体的游戏功能。
+
+    每个具体的Component表示游戏对象的一个部分或功能模块。
+
+    游戏类RPGGame包含一个Component列表,存储不同的组件对象。
+
+    在游戏循环里,遍历所有组件并调用其Update方法,使每个组件更新自身的逻辑。
+
+    thus,组件模式实现了高内聚、低耦合的模块化设计。
+
+    游戏对象的不同功能区分开来,便于单独开发调试。
+
+    可以动态组合不同的组件,构建出整体游戏行为。
+
+    组件之间通过游戏类对象解耦合,不直接交互。
+ */
