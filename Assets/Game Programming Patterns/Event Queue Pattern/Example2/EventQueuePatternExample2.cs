@@ -92,6 +92,7 @@ namespace EventQueuePatternExample2
     /// Message由MessageDispatcher类发送到监听对应信息者的对象中去。
     /// 对象可以通过MessageDispatcher类传递一个命令或者一些数据给另一个或多个监听对应信息的类。
     /// 可通过继承此接口自定义自己传递的数据信息
+    /// 这个IMessage接口是需要被重载的
     /// </summary>
     public interface IMessage
     {
@@ -354,8 +355,37 @@ namespace EventQueuePatternExample2
             MessageDispatcher.ClearMessages();
         }
     }
-
-
-
 }
 
+/*
+ 这一节是比较难的demo了，关于消息队列模式
+这一段代码实现了一个消息分发器的核心逻辑,主要功能如下:
+
+Message类实现了IMessage接口,作为基础消息类。
+
+MessageDispatcher类提供了消息的分发和监听管理。
+
+AddListener方法用于添加对某消息的监听。
+
+SendMessage方法用于分发消息,会触发对应的监听器。
+
+对需要延迟发送的消息,加入mMessages队列缓存。
+
+Update方法每个帧处理mMessages队列,发送延迟消息。
+
+mMessageHandlers字典存储消息与监听器的映射关系。
+
+支持同一消息有不同的过滤条件监听。
+
+MessageDispatcherStub类保证MessageDispatcher工作在所有场景中。
+
+其核心思想是:
+
+消息和监听器解耦,由分发器统一调度。
+
+支持不同消息类型和选择性监听。
+
+延迟队列使得发送可以延迟执行。
+
+字典存储映射关系,加速查找。
+ */
