@@ -1725,3 +1725,195 @@ GameObject* createBjorn()
 }
 ```
 
+### 14-Event Queue 事件队列模式 
+ 
+事件队列模式，对消息或事件的发送与处理进行时间上的解耦。
+
+要点
+
+1-事件队列：在先入先出的队列中存储一系列通知或请求。发送通知时，将请求放入队列并返回。处理请求的系统在稍晚些的时候从队列中获取请求并进行处理。 这样就解耦了发送者和接收者，既静态又及时。</br>
+2-事件队列很复杂，会对游戏架构引起广泛影响。中心事件队列是一个全局变量。这个模式的通常方法是一个大的交换站，游戏中的每个部分都能将消息送过这里。</br>
+3-事件队列是基础架构中很强大的存在，但有些时候强大并不代表好。事件队列模式将状态包裹在协议中，但是它还是全局的，仍然存在全局变量引发的一系列危险。</br>
+4-很大程度上，事件队列模式就是广为人知的GOF设计模式中观察者模式的异步实现。</br>
+
+使用场合
+
+1-如果你只是想解耦接收者和发送者，像观察者模式和命令模式都可以用较小的复杂度来进行处理。在需要解耦某些实时的内容时才建议使用事件队列。</br>
+2-不妨用推和拉来的情形来考虑。有一块代码A需要另一块代码B去做些事情。对A自然的处理方式是将请求推给B。
+同时，对B自然的处理方式是在B方便时将请求拉入。当一端有推模型另一端有拉模型时，你就需要在它们间放一个缓冲的区域。 
+这就是队列比简单的解耦模式多出来的那一部分。队列给了代码对拉取的控制权——接收者可以延迟处理，合并或者忽视请求。
+发送者能做的就是向队列发送请求然后就完事了，并不能决定什么时候发送的请求会受到处理。
+3-而当发送者需要一些回复反馈时，队列模式就不是一个好的选择。</br>
+
+
+举个例子，我们希望能有一个播放声音的功能PlaySound
+```cpp
+class Audio
+{
+public:
+  static void playSound(SoundId id, int volume);
+};
+```
+
+要是不解耦的话，是直接一个函数可以解决，发送方和接收方在一起
+```cpp
+void Audio::playSound(SoundId id, int volume)
+{
+  ResourceId resource = loadSound(id);
+  int channel = findOpenChannel();
+  if (channel == -1) return;
+  startSound(resource, channel, volume);
+}
+```
+
+但是这样有两个问题:
+
+1-在接收方处理完一个需求的之前，发送方都不能再发送新的需求。</br>
+2-无法合并多个请求
+
+于是我们需要在发送方和接收方之间新建一个缓存来做消息队列；
+
+消息的struct
+```cpp
+struct PlayMessage
+{
+  SoundId id;
+  int volume;
+};
+```
+
+Audio类里，我们要新建一个数组，来保存
+```cpp
+class Audio
+{
+public:
+  static void init()
+  {
+    numPending_ = 0;
+  }
+
+  // 其他代码……
+private:
+  static const int MAX_PENDING = 16;
+
+  static PlayMessage pending_[MAX_PENDING];
+  static int numPending_;
+};
+```
+
+playSound函数作为发送方
+```cpp
+void Audio::playSound(SoundId id, int volume)
+{
+  assert(numPending_ < MAX_PENDING);
+
+  pending_[numPending_].id = id;
+  pending_[numPending_].volume = volume;
+  numPending_++;
+}
+```
+
+然后Audio里的upfate()作为接受方
+```cpp
+class Audio
+{
+public:
+  static void update()
+  {
+    for (int i = 0; i < numPending_; i++)
+    {
+      ResourceId resource = loadSound(pending_[i].id);
+      int channel = findOpenChannel();
+      if (channel == -1) return;
+      startSound(resource, channel, pending_[i].volume);
+    }
+
+    numPending_ = 0;
+  }
+
+  // 其他代码……
+};
+```
+
+不过我们希望它是一个环状列表，我们不用动态分配内存；
+
+于是我们可以有两个指针，一快一慢;
+
+```cpp
+class Audio
+{
+public:
+  static void init()
+  {
+    head_ = 0;
+    tail_ = 0;
+  }
+
+  // 方法……
+private:
+  static int head_;
+  static int tail_;
+
+  // 数组……
+};
+```
+
+然后发送方就这样，每次都用求余数的方法来实现复用，但是要加一个判断就是tail不能超车一圈之后
+追上head
+
+```cpp
+void Audio::playSound(SoundId id, int volume)
+{
+  assert((tail_ + 1) % MAX_PENDING != head_);
+
+  // 添加到列表的尾部
+  pending_[tail_].id = id;
+  pending_[tail_].volume = volume;
+  tail_ = (tail_ + 1) % MAX_PENDING;
+}
+```
+
+然后update()也是这样
+
+```cpp
+void Audio::update()
+{
+  // 如果没有待处理的请求，就啥也不做
+  if (head_ == tail_) return;
+
+  ResourceId resource = loadSound(pending_[head_].id);
+  int channel = findOpenChannel();
+  if (channel == -1) return;
+  startSound(resource, channel, pending_[head_].volume);
+
+  head_ = (head_ + 1) % MAX_PENDING;
+}
+```
+
+每次调用 Audio::update() 时，都只处理队列中的一个请求。
+如果你想在一个更新周期内处理多个音频请求，你可以将 Audio::update()
+的这部分逻辑包装在一个循环中，直到队列为空或者达到你设定的处理请求的最大数量。
+
+我们还可以有一个小技巧来合并请求，在发出的时候；
+```cpp
+void Audio::playSound(SoundId id, int volume)
+{
+  // 遍历待处理的请求
+  for (int i = head_; i != tail_;
+       i = (i + 1) % MAX_PENDING)
+  {
+    if (pending_[i].id == id)
+    {
+      // 使用较大的音量
+      pending_[i].volume = max(volume, pending_[i].volume);
+
+      // 无需入队
+      return;
+    }
+  }
+
+  // 之前的代码……
+}
+```
+准备发出一个id = id的音频请求的时候，去遍历队列里有没有一样id的，
+如果有的话，那就去他们的最大音量，然后自身这个请求就不加入消息队列了，因为前面已经有了;
