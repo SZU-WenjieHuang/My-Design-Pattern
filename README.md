@@ -2102,3 +2102,238 @@ void enableAudioLogging()
   Locator::provide(service);
 }
 ```
+
+## 优化模式
+
+1-数据局部性介绍了计算机的存储层次以及如何使用其以获得优势。 </br>
+2-脏标识帮你避开不必要的计算。 </br>
+3-对象池帮你避开不必要的内存分配。 </br>
+4-空间分区加速了虚拟世界和其中元素的空间布局。</br>
+
+### 16-Data Locality 数据局部性模式
+
+合理组织数据，充分使用CPU的缓存来加速内存读取。
+
+要仔细阅读这里提出的例子: https://gpp.tkchu.me/data-locality.html
+
+关键是提高缓存命中率，现代的CPU有缓存来加速内存读取，其可以更快地读取最近访问过的内存毗邻的内存。
+基于这一点，我们通过保证处理的数据排列在连续内存上，以提高内存局部性，从而提高性能。
+
+为了保证数据局部性，就要避免的缓存不命中。也许你需要牺牲一些宝贵的抽象。
+你越围绕数据局部性设计程序，就越放弃继承、接口和它们带来的好处。没有银弹，只有权衡。
+
+使用数据局部性的第一准则是在遇到性能问题时使用。不要将其应用在代码库不经常使用的角落上。 
+优化代码后其结果往往更加复杂，更加缺乏灵活性。
+
+***数据结构的例子**
+
+vector等连续线性存储的数据结构由于内存地址连续,比链表这种链式存储的数据结构有更高的内存读取效率。
+主要原因如下:
+
+vector中的元素存储是连续的,充分利用了CPU的预取机制,读取一个元素后很可能下一个元素已经加载到缓存中了。
+
+而链表中的元素在内存中是离散分布的,读取一个节点的下一节点信息时很可能不在缓存中,需要重新加载。
+
+vector可以直接用下标随机访问任意元素,链表需要从头节点逐步遍历。
+
+vector内存访问模式更加线性和可预测,对CPU缓存更友好。
+
+链表需要存储更多的指针信息,数据密度较低。
+
+说到底还是连续的内存可以让CPU读取数据的命中率更高。
+
+接下来的三个例子都是围绕这一点展开的;
+
+***方法1 连续数组***
+就是把尽量多的内容放在连续数组内;
+
+举个例子，之前component模式内的内容;
+
+这是entity;
+```cpp
+class GameEntity
+{
+public:
+  GameEntity(AIComponent* ai,
+             PhysicsComponent* physics,
+             RenderComponent* render)
+  : ai_(ai), physics_(physics), render_(render)
+  {}
+
+  AIComponent* ai() { return ai_; }
+  PhysicsComponent* physics() { return physics_; }
+  RenderComponent* render() { return render_; }
+
+private:
+  AIComponent* ai_;
+  PhysicsComponent* physics_;
+  RenderComponent* render_;
+};
+```
+
+然后这些是component;
+```cpp
+class AIComponent
+{
+public:
+  void update() { /* 处理并修改状态…… */ }
+
+private:
+  // 目标，情绪，等等……
+};
+
+class PhysicsComponent
+{
+public:
+  void update() { /* 处理并修改状态…… */ }
+
+private:
+  // 刚体，速度，质量，等等……
+};
+
+class RenderComponent
+{
+public:
+  void render() { /* 处理并修改状态…… */ }
+
+private:
+  // 网格，纹理，着色器，等等……
+};
+```
+
+当我们在gameloop里更新每一个entity的时候，会是这样的
+```cpp
+while (!gameOver)
+{
+  // 处理AI
+  for (int i = 0; i < numEntities; i++)
+  {
+    entities[i]->ai()->update();
+  }
+
+  // 更新物理
+  for (int i = 0; i < numEntities; i++)
+  {
+    entities[i]->physics()->update();
+  }
+
+  // 绘制屏幕
+  for (int i = 0; i < numEntities; i++)
+  {
+    entities[i]->render()->render();
+  }
+
+  // 其他和时间有关的游戏循环机制……
+}
+```
+会在不同entity的component种反复横跳，游戏实体的数组存储的是指针，所以为了获取游戏实体，我们得转换指针。缓存不命中。
+游戏实体的数组存储的是指针，所以为了获取游戏实体，我们得转换指针。缓存不命中。
+
+所以我们可以新建一个大的数组来存放这些component，这些都是组件的数组，而不是指向组件的指针。
+
+```cpp
+AIComponent* aiComponents =
+    new AIComponent[MAX_ENTITIES];
+PhysicsComponent* physicsComponents =
+    new PhysicsComponent[MAX_ENTITIES];
+RenderComponent* renderComponents =
+    new RenderComponent[MAX_ENTITIES];
+```
+
+然后这样子更新，就可以在内存地址上非常连续了
+
+```cpp
+while (!gameOver)
+{
+  // 处理AI
+  for (int i = 0; i < numEntities; i++)
+  {
+    aiComponents[i].update();
+  }
+
+  // 更新物理
+  for (int i = 0; i < numEntities; i++)
+  {
+    physicsComponents[i].update();
+  }
+
+  // 绘制屏幕
+  for (int i = 0; i < numEntities; i++)
+  {
+    renderComponents[i].render();
+  }
+
+  // 其他和时间有关的游戏循环机制……
+}
+```
+***方法2 打包数据***
+我们也可以把所有的粒子系统里的粒子都打包在巨大的连续数组种，用管理类封装；
+```cpp
+class Particle
+{
+public:
+  void update() { /* 重力，等等…… */ }
+  // 位置，速度，等等……
+};
+
+class ParticleSystem
+{
+public:
+  ParticleSystem()
+  : numParticles_(0)
+  {}
+
+  void update();
+private:
+  static const int MAX_PARTICLES = 100000;
+
+  int numParticles_;
+  Particle particles_[MAX_PARTICLES];
+};
+```
+
+这样子更新
+```cpp
+void ParticleSystem::update()
+{
+  for (int i = 0; i < numParticles_; i++)
+  {
+    particles_[i].update();
+  }
+}
+```
+
+***方法3 冷热分割***
+简单的思想理解是 把每帧都需要更新的直接用数据存，然后用的少的，用指针存;
+
+1-将频繁访问或更新的组件设计为"热"组件,直接以数据成员的形式包含在对象中。</br>
+2-将不常访问的组件设计为"冷"组件,以指针成员的形式包含在对象中。</br>
+3-"热"组件直接内嵌,可以提高访问性能,但是会增加对象大小。</br>
+4-"冷"组件以指针形式包含,可以按需加载,减少对象大小。</br>
+5-根据不同组件的访问热度,进行分割设计,实现性能和尺寸的平衡。</br>
+6-一般将每帧都需要访问的组件设计为"热",偶尔访问的设计为"冷"。</br>
+
+像下文代码这样，不常用的打包成以恶搞LootDrop结构，用一个指针存，这样能最大程度保证常用
+的变量的缓存命中;
+```cpp
+class AIComponent
+{
+public:
+  // 方法……
+private:
+  Animation* animation_;
+  double energy_;
+  Vector goalPos_;
+
+  LootDrop* loot_;
+};
+
+class LootDrop
+{
+  friend class AIComponent;
+  LootType drop_;
+  int minDrops_;
+  int maxDrops_;
+  double chanceOfDrop_;
+};
+```
