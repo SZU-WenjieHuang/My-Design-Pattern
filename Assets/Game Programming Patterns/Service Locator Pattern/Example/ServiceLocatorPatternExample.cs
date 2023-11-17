@@ -69,6 +69,7 @@ namespace ServiceLocatorPatternExample
         static IAudio AudioService_;
         static NullAudio NullAudioService_;
 
+        /// 收到查询，就返回服务的定位
         public static IAudio GetAudioService() { return AudioService_; }
 
         /// <summary>
