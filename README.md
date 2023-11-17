@@ -1917,3 +1917,188 @@ void Audio::playSound(SoundId id, int volume)
 ```
 准备发出一个id = id的音频请求的时候，去遍历队列里有没有一样id的，
 如果有的话，那就去他们的最大音量，然后自身这个请求就不加入消息队列了，因为前面已经有了;
+
+### 15-Service Locator 服务定位器
+提供服务的全局接入点，而不必让用户和实现它的具体类耦合。
+
+服务定位模式：服务类定义了一堆操作的抽象接口。具体的服务提供者实现这个接口。 
+分离的服务定位器提供了通过查询合适的提供者， 获取服务的方法，
+同时隐藏了提供者的具体细节和需要定位它的进程。
+
+一般通过使用单例或者静态类来实现服务定位模式，提供服务的全局接入点。
+
+服务定位模式可以看做是更加灵活，更加可配置的单例模式。
+如果用得好，它能以很小的运行时开销，换取很大的灵活性。
+相反，如果用得不好，它会带来单例模式的所有缺点以及更多的运行时开销。
+
+***我的理解***
+一个很好的比喻，就是在需求和服务中间加上一个定位器；
+
+需要耦合到某些东西上来播放声音， 但是直接接触到具体的音频实现，就好像给了一百个陌生人你家的地址，
+只是为了让他们在门口放一封信。 这不仅仅是隐私问题，在你搬家后，
+需要告诉每个人新地址是个更加痛苦的问题。
+有个更好的解决办法：一本电话薄。 需要联系我们的人可以在上面查找并找到现在的地址。 
+当我们搬家时，我们通知电话公司。 他们更新电话薄，每个人都知道了新地址。 
+事实上，我们甚至无需给出真实的地址。 我们可以列一个转发信箱或者其他“代表”我们的东西。 
+通过让调用者查询电话薄找我们，我们获得了一个控制找我们的方法的方便地方。
+
+***代码Demo***
+
+比如我们这里有一个服务，都是关于Audio的；我们首先暴露一些接口，这里是音频接口
+```cpp
+class Audio
+{
+public:
+  virtual ~Audio() {}
+  virtual void playSound(int soundID) = 0;
+  virtual void stopSound(int soundID) = 0;
+  virtual void stopAllSounds() = 0;
+};
+```
+然后有服务提供者，去实现具体的方法：
+
+```cpp
+class ConsoleAudio : public Audio
+{
+public:
+  virtual void playSound(int soundID)
+  {
+    // 使用主机音频API播放声音……
+  }
+
+  virtual void stopSound(int soundID)
+  {
+    // 使用主机音频API停止声音……
+  }
+
+  virtual void stopAllSounds()
+  {
+    // 使用主机音频API停止所有声音……
+  }
+};
+```
+
+然后在这里就是有一个简单的定位器，每当geitAudio()的时候就可以返回服务
+```cpp
+class Locator
+{
+public:
+  static Audio* getAudio() { return service_; }
+
+  static void provide(Audio* service)
+  {
+    service_ = service;
+  }
+
+private:
+  static Audio* service_;
+};
+```
+getAudio()被声明为static静态函数,这样它可以通过类名直接调用,目的是不需要实例化Locator对象。
+
+其他模块可以通过Locator::getAudio()获得这个全局的Audio服务。
+
+所以可以全局访问Locator提供的Audio服务,实现了解耦和全局访问.
+
+```cpp
+Audio *audio = Locator::getAudio();
+audio->playSound(VERY_LOUD_BANG);
+```
+
+然后我们也可以注册成为服务提供者
+
+```cpp
+ConsoleAudio *audio = new ConsoleAudio();
+Locator::provide(audio);
+```
+
+更万无一失，我们需要提供一个空服务，以避免我们在服务提供者注册前使用服务，
+它会返回NULL。 如果调用代码没有检查，游戏就崩溃了。
+
+```cpp
+class NullAudio: public Audio
+{
+public:
+  virtual void playSound(int soundID) { /* 什么也不做 */ }
+  virtual void stopSound(int soundID) { /* 什么也不做 */ }
+  virtual void stopAllSounds()        { /* 什么也不做 */ }
+};
+```
+
+然后来检查，要是service == NULL的话，那就返回空服务；
+
+```cpp
+class Locator
+{
+public:
+  static void initialize() { service_ = &nullService_; }
+
+  static Audio& getAudio() { return *service_; }
+
+  static void provide(Audio* service)
+  {
+    if (service == NULL)
+    {
+      // 退回空服务
+      service_ = &nullService_;
+    }
+    else
+    {
+      service_ = service;
+    }
+  }
+
+private:
+  static Audio* service_;
+  static NullAudio nullService_;
+};
+```
+
+另一个作用是日志装饰器，因为我们不能遇到问题就直接输出log，我们需要定义一个专门输出日志的服务；
+```cpp
+class LoggedAudio : public Audio
+{
+public:
+  LoggedAudio(Audio &wrapped)
+  : wrapped_(wrapped)
+  {}
+
+  virtual void playSound(int soundID)
+  {
+    log("play sound");
+    wrapped_.playSound(soundID);
+  }
+
+  virtual void stopSound(int soundID)
+  {
+    log("stop sound");
+    wrapped_.stopSound(soundID);
+  }
+
+  virtual void stopAllSounds()
+  {
+    log("stop all sounds");
+    wrapped_.stopAllSounds();
+  }
+
+private:
+  void log(const char* message)
+  {
+    // 记录日志的代码……
+  }
+
+  Audio &wrapped_;
+};
+```
+
+然后我们可以注册这个服务，来使用它;
+```
+void enableAudioLogging()
+{
+  // 装饰现有的服务
+  Audio *service = new LoggedAudio(Locator::getAudio());
+
+  // 将它换进来
+  Locator::provide(service);
+}
+```
