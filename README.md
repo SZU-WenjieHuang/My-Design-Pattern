@@ -1447,3 +1447,281 @@ private:
 3-Monster根据Breed执行不同的功能
 
 
+## 解耦型模式 Decoupling Patterns
+
+这一部分的三种模式，专注于解耦。
+我们说两块代码“解耦”时，是指修改一块代码一般不会需要修改另一块代码。 当我们修改游戏中的特性时，需要修改的代码越少，就越容易。
+
+1-组件模式将一个实体拆成多个，解耦不同的领域。</br>
+2-事件队列解耦了两个互相通信的事物，稳定而且实时。</br>
+3-服务定位器让代码使用服务而无需绑定到提供服务的代码上。</br>
+
+### 13-Component 组件模式 (非常重要！)
+单一实体跨越了多个领域。为了保持领域之间相互分离，将每部分代码放入各自的组件类中。 
+实体被简化为组件的容器。
+
+特别重要，要理解“实体是组件的容器”。这样的好处是避免在一个类逐渐变得庞大，复杂，冗余;
+
+比如我们有一个面包师Bjorn的类
+```cpp
+class Bjorn
+{
+public:
+  Bjorn()
+  : velocity_(0),
+    x_(0), y_(0)
+  {}
+
+  void update(World& world, Graphics& graphics);
+
+private:
+  static const int WALK_ACCELERATION = 1;
+
+  int velocity_;
+  int x_, y_;
+
+  Volume volume_;
+
+  Sprite spriteStand_;
+  Sprite spriteWalkLeft_;
+  Sprite spriteWalkRight_;
+};
+```
+
+他需要每帧都update自己的状态，包括处理input，解决世界里的物理碰撞，和graphics渲染
+这三种
+
+```cpp
+void Bjorn::update(World& world, Graphics& graphics)
+{
+  // 根据用户输入修改英雄的速度
+  switch (Controller::getJoystickDirection())
+  {
+    case DIR_LEFT:
+      velocity_ -= WALK_ACCELERATION;
+      break;
+
+    case DIR_RIGHT:
+      velocity_ += WALK_ACCELERATION;
+      break;
+  }
+
+  // 根据速度修改位置
+  x_ += velocity_;
+  world.resolveCollision(volume_, x_, y_, velocity_);
+
+  // 绘制合适的图形
+  Sprite* sprite = &spriteStand_;
+  if (velocity_ < 0)
+  {
+    sprite = &spriteWalkLeft_;
+  }
+  else if (velocity_ > 0)
+  {
+    sprite = &spriteWalkRight_;
+  }
+
+  graphics.draw(*sprite, x_, y_);
+}
+```
+
+但在此处我们就能看到冗余的情况，每一项更新都需要在update函数里写自己的逻辑在调用
+world 和 graphics模块去处理碰撞与渲染，
+随着功能日益增长，这个update函数也会变得越累越复杂；所以这里我们希望能不能把更新每一个
+功能的逻辑封装成一个组件类；
+
+比如下面这里，就把根据input改变位置的逻辑分离出来了；
+```cpp
+class InputComponent
+{
+public:
+  void update(Bjorn& bjorn)
+  {
+    switch (Controller::getJoystickDirection())
+    {
+      case DIR_LEFT:
+        bjorn.velocity -= WALK_ACCELERATION;
+        break;
+
+      case DIR_RIGHT:
+        bjorn.velocity += WALK_ACCELERATION;
+        break;
+    }
+  }
+
+private:
+  static const int WALK_ACCELERATION = 1;
+};
+```
+
+再把Physical Component 和 Graphics Component分离出来后
+
+```cpp
+class PhysicsComponent
+{
+public:
+  void update(Bjorn& bjorn, World& world)
+  {
+    bjorn.x += bjorn.velocity;
+    world.resolveCollision(volume_,
+        bjorn.x, bjorn.y, bjorn.velocity);
+  }
+
+private:
+  Volume volume_;
+};
+```
+
+```cpp
+class GraphicsComponent
+{
+public:
+  void update(Bjorn& bjorn, Graphics& graphics)
+  {
+    Sprite* sprite = &spriteStand_;
+    if (bjorn.velocity < 0)
+    {
+      sprite = &spriteWalkLeft_;
+    }
+    else if (bjorn.velocity > 0)
+    {
+      sprite = &spriteWalkRight_;
+    }
+
+    graphics.draw(*sprite, bjorn.x, bjorn.y);
+  }
+
+private:
+  Sprite spriteStand_;
+  Sprite spriteWalkLeft_;
+  Sprite spriteWalkRight_;
+};
+```
+
+这时候我们的Bjorn类，只需要包含这三个Component，就可以直接调用他们各自的update()函数去
+update，此时的update类就非常简洁了;
+
+```cpp
+class Bjorn
+{
+public:
+  int velocity;
+  int x, y;
+
+  void update(World& world, Graphics& graphics)
+  {
+    input_.update(*this);
+    physics_.update(*this, world);
+    graphics_.update(*this, graphics);
+  }
+
+private:
+  InputComponent input_;
+  PhysicsComponent physics_;
+  GraphicsComponent graphics_;
+};
+```
+
+不过这个时候，我们还是需要有一个Bjorn类并且为它创建特定的各自component；
+
+不如换一种逻辑，我们没有Bjorn类，只有一个GameObject类。再用各种组件去初始化它让他
+变成一个Bjorn类；
+
+然后各种Component，就可以定义为一个抽象类，然后我根据需要去实例化与继承他们；
+
+比如：
+各个Component的抽象类，我们需要去实例化他们;
+
+```cpp
+class InputComponent
+{
+public:
+  virtual ~InputComponent() {}
+  virtual void update(Bjorn& bjorn) = 0;
+};
+
+class PhysicsComponent
+{
+public:
+  virtual ~PhysicsComponent() {}
+  virtual void update(GameObject& obj, World& world) = 0;
+};
+
+class GraphicsComponent
+{
+public:
+  virtual ~GraphicsComponent() {}
+  virtual void update(GameObject& obj, Graphics& graphics) = 0;
+};
+```
+
+此时的Game Object类，需要各个Component去实例化；
+```cpp
+class GameObject
+{
+public:
+  int velocity;
+  int x, y;
+
+  GameObject(InputComponent* input,
+             PhysicsComponent* physics,
+             GraphicsComponent* graphics)
+  : input_(input),
+    physics_(physics),
+    graphics_(graphics)
+  {}
+
+  void update(World& world, Graphics& graphics)
+  {
+    input_->update(*this);
+    physics_->update(*this, world);
+    graphics_->update(*this, graphics);
+  }
+
+private:
+  InputComponent* input_;
+  PhysicsComponent* physics_;
+  GraphicsComponent* graphics_;
+};
+```
+然后我们像新建一个Bjorn的时候，首先需要定制我们的Component
+
+```cpp
+class PlayerInputComponent : public InputComponent
+{
+public:
+  virtual void update(Bjorn& bjorn)
+  {
+    // 自动控制Bjorn的AI……
+  }
+};
+
+class BjornPhysicsComponent : public PhysicsComponent
+{
+public:
+  virtual void update(GameObject& obj, World& world)
+  {
+    // 物理代码……
+  }
+};
+
+class BjornGraphicsComponent : public GraphicsComponent
+{
+public:
+  virtual void update(GameObject& obj, Graphics& graphics)
+  {
+    // 图形代码……
+  }
+};
+```
+
+然后再用他们实例化一个GameObject：
+```
+GameObject* createBjorn()
+{
+  return new GameObject(new PlayerInputComponent(),
+                        new BjornPhysicsComponent(),
+                        new BjornGraphicsComponent());
+}
+```
+
