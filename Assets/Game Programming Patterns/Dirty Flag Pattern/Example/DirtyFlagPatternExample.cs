@@ -33,7 +33,7 @@ namespace DirtyFlagPatternExample
                 graphNode.setTransform(newLocalTransform);
 
                 //再次进行渲染
-                graphNode.render(parentWorldTransform, true);
+                graphNode.render(parentWorldTransform, false);
             }
         }
     }
@@ -134,9 +134,13 @@ namespace DirtyFlagPatternExample
             //而当节点没有改动时（dirty=false），跳过combine的过程，否则，表示此链为脏，进行combine
             if (dirty)
             {
-                Debug.Log("this node is dirty,combine it!");
+                //Debug.Log("this node is dirty,combine it!");
                 world_ = local_.combine(parentWorld);
                 dirty_ = false;
+            }
+            else
+            {
+                Debug.Log("this node is not dirty, dont need combine it!");
             }
 
             //渲染mesh
@@ -165,4 +169,24 @@ namespace DirtyFlagPatternExample
     }
 
 }
+/*
+ * 这段代码是在 Unity 中使用 "Dirty Flag" 模式实现的一个场景图节点渲染的例子。主要包含了以下几个部分：
+
+DirtyFlagPatternExample 是主类，它在 Start 和 Update 中调用 render 方法来渲染场景图。
+
+MeshEX 是一个空类，代表一个场景图节点可以包含的网格对象。
+
+TransformEX 是一个包含位置（Position）的类，它有一个 combine 方法，可以将自身的位置和另一个 TransformEX 对象的位置相加。
+
+GraphNode 是一个场景图节点类，它包含一个 MeshEX 对象、一个 local_ 变换、一组子节点以及一个 dirty_ 标志。它的 render 方法是主要的渲染函数，如果 dirty_ 或父节点传递下来的 dirty 参数为 true，则会计算 world_ 变换并重置 dirty_ 标志，然后渲染网格并递归渲染所有子节点。
+
+该代码的主要工作流程如下：
+
+在 Start 方法中，首先初始化场景图节点以及它的子节点，然后调用 render 方法进行渲染。
+
+在 Update 方法中，如果按下数字键1（KeyCode.Alpha1），则改变场景图节点的位置，触发 "dirty" 标志，并再次调用 render 方法。
+*/
+
+// 这个demo不是很好，因为我们传入的是true，所以所有的都会被标记为dirty
+// graphNode.render(TransformEX.origin, true);。在这里，dirty 参数被设置为 true。这意味着渲染场景图的根节点时，无论根节点的 dirty_ 的值是多少，dirty 参数的值都会被设置为 true，导致根节点及其所有子节点的 dirty 都是 true。
 
