@@ -2337,3 +2337,143 @@ class LootDrop
   double chanceOfDrop_;
 };
 ```
+
+### 17-Dirty Flag 脏标记模式
+脏标记模式,是一种用于延迟计算和提高效率的设计模式,其核心思想是:
+
+1-在数据对象上引入一个"脏"标记,当对象数据发生变化时,设置标记为"脏"。</br>
+2-当需要读访问脏对象时,先进行必要的计算或更新,再清除脏标记,然后返回新的对象。</br>
+3-当有读请求时,重新计算标记为脏的对象,避免不必要的重复计算。</br>
+4-当有写请求时,只需设置脏标记,不立即执行计算,延迟到之后的读请求时再计算。</br>
+5-这样可以大大减少冗余计算,降低每次写请求带来的计算性能损耗。</br>
+6-特别适合读请求远远大于写请求的场景。</br>
+
+所以,可以总结为:
+
+1-使用脏标记延迟写时的计算到读时再执行。</br>
+2-只对有变动的脏数据重新计算,大幅减少冗余计算。</br>
+3-脏标记模式广泛应用于渲染、数据库缓存、文件系统等需要频繁读写同一数据集的场景。</br>
+
+举个例子
+
+想象游戏世界中有一艘海上的海盗船。 桅杆的顶端有瞭望塔，瞭望塔中有海盗，海盗肩上有鹦鹉。 船本身的变换定位船在海上的位置。瞭望塔的变换定位它在船上的位置，诸如此类。
+
+那我们更新物体的世界坐标的时候，比如我们更新了船，船的所有子类也要更新，再更新海盗，海盗肩膀上的鹦鹉也要更新，此时鹦鹉就重复了，我们引入脏标识就是为了不要重复计算；
+
+最基础的，我们给出了一个Transform的类，和一个GrapNode表示我们准备更新的世界；
+
+```cpp
+class Transform
+{
+public:
+  static Transform origin();
+
+  Transform combine(Transform& other);
+};
+```
+
+这是GraphNode, 目前只有local变化，和mesh这两个成员；
+```cpp
+class GraphNode
+{
+public:
+  GraphNode(Mesh* mesh)
+  : mesh_(mesh),
+    local_(Transform::origin())
+  {}
+
+private:
+  Transform local_;
+  Mesh* mesh_;
+
+  GraphNode* children_[MAX_CHILDREN];
+  int numChildren_;
+};
+```
+
+我们尚未优化的递归遍历方法如下，这样会引入很多重复计算；
+
+```cpp
+void GraphNode::render(Transform parentWorld)
+{
+  Transform world = local_.combine(parentWorld); //local的乘上parentWorld的
+
+  if (mesh_) renderMesh(mesh_, world); //渲染Mesh
+
+  for (int i = 0; i < numChildren_; i++)
+  {
+    children_[i]->render(world);
+  }
+}
+```
+
+我们可以使用脏标识, 关键是引入两个新的变量，一个是把Transform World单独拎出来了，另一个就是dirty字段
+
+```cpp
+class GraphNode
+{
+public:
+  GraphNode(Mesh* mesh)
+  : mesh_(mesh),
+    local_(Transform::origin()),
+    dirty_(true)
+  {}
+
+  // 其他方法……
+
+private:
+  Transform world_;
+  bool dirty_;
+  Transform local_;
+  Mesh* mesh_;
+};
+```
+
+当我们设置一个新的节点的时候，就去更新它的local矩阵和dirty变量
+
+```cpp
+void GraphNode::setTransform(Transform local)
+{
+  local_ = local;
+  dirty_ = true;
+}
+```
+
+然后我们render的时候，
+根据这个 render 函数的实现，当父节点调用 render 函数时，
+它会首先检查自身和父节点是否需要更新（通过 dirty 变量），
+然后可能会更新自己的状态（比如 world_ 变量）。然后，如果父节点有网格，它会渲染自己的网格。
+
+接下来，父节点会遍历所有的子节点，对每个子节点调用 render 函数。
+这是一个递归的过程，因此，如果一个子节点也有自己的子节点，
+那么这个子节点的子节点也会被渲染。
+
+```
+void GraphNode::render(Transform parentWorld, bool dirty)
+{
+  dirty |= dirty_; // 要是两个都为false，才为false
+
+  // 如果是dirty，它就会用 local_.combine(parentWorld) 来更新 world_
+  if (dirty)
+  {
+    world_ = local_.combine(parentWorld);
+    dirty_ = false;
+  }
+
+  // 有mesh的话就渲染
+  if (mesh_) renderMesh(mesh_, world_);
+
+  // 遍历子节点
+  for (int i = 0; i < numChildren_; i++)
+  {
+    children_[i]->render(world_, dirty);
+  }
+}
+```
+
+当一个节点及其所有父节点都没有被标记为 "dirty"（即它们的状态没有改变）时，
+该节点的 world 变换就不需要重新计算。
+因为 dirty 标志会在节点自身或任何父节点的状态改变时被设置为 true，
+所以只有当节点和所有父节点的状态都没有改变时，
+这个节点的 dirty 标志才会是 false。在这种情况下，
+if (dirty) {...} 这个判断会跳过，从而避免了不必要的 world 变换的计算。
