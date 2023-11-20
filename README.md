@@ -2722,3 +2722,9 @@ private:
   Particle pool_[100];
 };
 ```
+
+### 19-空间分区
+其实更像是划分格子，节省计算成本；
+https://gpp.tkchu.me/spatial-partition.html
+
+可以参考原文的设计和代码
