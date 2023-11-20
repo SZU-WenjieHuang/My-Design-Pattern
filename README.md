@@ -2477,3 +2477,248 @@ void GraphNode::render(Transform parentWorld, bool dirty)
 所以只有当节点和所有父节点的状态都没有改变时，
 这个节点的 dirty 标志才会是 false。在这种情况下，
 if (dirty) {...} 这个判断会跳过，从而避免了不必要的 world 变换的计算。
+
+### 18-Object Pool 对象池模式
+对象池模式就是为了可以很好的重用对象;
+
+比如我们希望在粒子系统中实现一个粒子类的对象池，首先我们需要有一个粒子类：
+
+```cpp
+class Particle
+{
+public:
+  Particle()
+  : framesLeft_(0)
+  {}
+
+  void init(double x, double y,
+            double xVel, double yVel, int lifetime)
+  {
+    x_ = x; y_ = y;
+    xVel_ = xVel; yVel_ = yVel;
+    framesLeft_ = lifetime;
+  }
+
+  void animate()
+  {
+    if (!inUse()) return;
+
+    framesLeft_--;
+    x_ += xVel_;
+    y_ += yVel_;
+  }
+
+  bool inUse() const { return framesLeft_ > 0; }
+
+private:
+  int framesLeft_;
+  double x_, y_;
+  double xVel_, yVel_;
+};
+```
+
+在这个粒子类里，我们初始化其为蒸菜使用的粒子(活跃状态)，然后每一帧都调用一次animate()函数。
+
+下面是一个最简单的对象池
+
+```cpp
+class ParticlePool
+{
+public:
+  void create(double x, double y,
+              double xVel, double yVel, int lifetime);
+
+  void animate()
+  {
+    for (int i = 0; i < POOL_SIZE; i++)
+    {
+      particles_[i].animate();
+    }
+  }
+
+private:
+  static const int POOL_SIZE = 100;
+  Particle particles_[POOL_SIZE];
+};
+```
+
+它的更新方式非常简单，就是遍历池子，然后找到第一个可用的粒子，去激活它; (通过create函数);
+
+```cpp
+void ParticlePool::create(double x, double y,
+                          double xVel, double yVel,
+                          int lifetime)
+{
+  // 找到一个可用粒子
+  for (int i = 0; i < POOL_SIZE; i++)
+  {
+    if (!particles_[i].inUse())
+    {
+      particles_[i].init(x, y, xVel, yVel, lifetime);
+      return;
+    }
+  }
+}
+```
+
+这种更新方法需要遍历整个集合，直到找到一个空闲槽。 如果池很大很满，这可能很慢。 
+
+我们要是不想浪费时间，就需要新建一个list去存储是否空闲，但这样会浪费空间；所以我们用Union，巧妙的利用了没有activate的粒子的内存；
+
+```cpp
+class Particle
+{
+public:
+  // ...
+
+  Particle* getNext() const { return state_.next; }
+  void setNext(Particle* next) { state_.next = next; }
+
+private:
+  int framesLeft_;
+
+  union
+  {
+    // 使用时的状态
+    struct
+    {
+      double x, y;
+      double xVel, yVel;
+    } live;
+
+    // 可重用时的状态
+    Particle* next;
+  } state_;
+};
+```
+当粒子没有被activate的时候，他就存储的是一个next指针。再这个对象池的代码里，union里的数据同时只能存在一个，需要切换。
+
+我们可以追踪头指针;
+```cpp
+class ParticlePool
+{
+  // ...
+private:
+  Particle* firstAvailable_;
+};
+```
+
+初始化的时候，所有都是可用的
+```cpp
+ParticlePool::ParticlePool()
+{
+  // 第一个可用的粒子
+  firstAvailable_ = &particles_[0];
+
+  // 每个粒子指向下一个
+  for (int i = 0; i < POOL_SIZE - 1; i++)
+  {
+    particles_[i].setNext(&particles_[i + 1]);
+  }
+
+  // 最后一个终结的列表
+  particles_[POOL_SIZE - 1].setNext(NULL);
+}
+```
+
+然后我们每一次插入新的粒子的时候，就不用遍历了，直接找到头指针初始化，然后把这个firstAvailable的指针传给下一个；
+
+```cpp
+void ParticlePool::create(double x, double y,
+                          double xVel, double yVel,
+                          int lifetime)
+{
+  // 保证池没有满
+  assert(firstAvailable_ != NULL);
+
+  // 将它从可用粒子列表中移除
+  Particle* newParticle = firstAvailable_;
+  firstAvailable_ = newParticle->getNext();
+
+  newParticle->init(x, y, xVel, yVel, lifetime);
+}
+```
+
+要是粒子的frametime耗尽，准备消亡的时候，我们返回一个ture，然后把它放回到对象池里available指针的头部;
+```cpp
+void ParticlePool::animate()
+{
+  for (int i = 0; i < POOL_SIZE; i++)
+  {
+    if (particles_[i].animate())
+    {
+      // 将粒子加到列表的前部
+      particles_[i].setNext(firstAvailable_);
+      firstAvailable_ = &particles_[i];
+    }
+  }
+}
+```
+
+思考一个问题，要是对象池和对象不耦合，那我们就可以使用模板，来使用对象池保存多种对象类型；
+
+```cpp
+template <class TObject>
+class GenericPool
+{
+private:
+  static const int POOL_SIZE = 100;
+
+  TObject pool_[POOL_SIZE];
+  bool    inUse_[POOL_SIZE];
+};
+```
+
+如果我们希望在对象池内部初始化对象，则我们也要提供相应多种类的create函数
+
+```cpp
+class Particle
+{
+  // 多种初始化方式……
+  void init(double x, double y);
+  void init(double x, double y, double angle);
+  void init(double x, double y, double xVel, double yVel);
+};
+
+class ParticlePool
+{
+public:
+  void create(double x, double y)
+  {
+    // 转发给粒子……
+  }
+
+  void create(double x, double y, double angle)
+  {
+    // 转发给粒子……
+  }
+
+  void create(double x, double y, double xVel, double yVel)
+  {
+    // 转发给粒子……
+  }
+};
+```
+
+如果是在外部代码初始化的化(使用接口)，那就不需要
+```cpp
+class Particle
+{
+public:
+  // 多种初始化方法
+  void init(double x, double y);
+  void init(double x, double y, double angle);
+  void init(double x, double y, double xVel, double yVel);
+};
+
+class ParticlePool
+{
+public:
+  Particle* create()
+  {
+    // 返回可用粒子的引用……
+  }
+private:
+  Particle pool_[100];
+};
+```
