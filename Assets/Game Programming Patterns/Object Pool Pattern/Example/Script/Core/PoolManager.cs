@@ -2,6 +2,8 @@
 //	PoolManager.cs
 //
 //	Created by 浅墨
+//
+//  用Stack实现的对象池，谢谢浅墨大佬
 //-------------------------------------------------------------------------------------
 
 using UnityEngine;
@@ -34,6 +36,8 @@ namespace ObjectPoolPatternExample
             this.poolObjectPrefab = poolObjectPrefab;
             this.poolSize = initialCount;
             this.fixedSize = fixedSize;
+
+            //填充一定的数量
             //填充池 | populate the pool
             for (int index = 0; index < initialCount; index++)
             {
